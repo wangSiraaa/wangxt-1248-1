@@ -1,4 +1,5 @@
-import { Injectable, NotFoundException, BadRequestException, Inject, CACHE_MANAGER } from '@nestjs/common';
+import { Injectable, NotFoundException, BadRequestException, Inject } from '@nestjs/common';
+import { CACHE_MANAGER } from '@nestjs/cache-manager';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository, DataSource } from 'typeorm';
 import { Cache } from 'cache-manager';
@@ -72,9 +73,6 @@ export class AirspaceService {
   }
 
   async checkConflict(dto: CheckConflictDto): Promise<{ hasConflict: boolean; conflicts: Airspace[] }> {
-    const noFlyZones = await this.getNoFlyZones();
-
-    const queryRunner = this.dataSource.createQueryRunner();
     try {
       const routeGeoJson = JSON.stringify(dto.route);
 
@@ -94,8 +92,6 @@ export class AirspaceService {
       };
     } catch (error) {
       throw new BadRequestException('航线数据格式错误，必须是合法的GeoJSON LineString');
-    } finally {
-      await queryRunner.release();
     }
   }
 

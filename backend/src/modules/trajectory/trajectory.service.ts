@@ -74,54 +74,49 @@ export class TrajectoryService {
     details: any[];
   }> {
     try {
-      const queryRunner = this.dataSource.createQueryRunner();
-      try {
-        const result = await this.dataSource.query(
-          `
-          WITH actual_points AS (
-            SELECT 
-              (ST_DumpPoints(ST_SetSRID(ST_GeomFromGeoJSON($1), 4326))).geom AS geom,
-              generate_series(1, ST_NPoints(ST_SetSRID(ST_GeomFromGeoJSON($1), 4326))) AS idx
-          ),
-          deviations AS (
-            SELECT 
-              idx,
-              ST_Distance(
-                geom::geography,
-                ST_SetSRID(ST_GeomFromGeoJSON($2), 4326)::geography
-              ) AS dist,
-              ST_X(geom) AS lng,
-              ST_Y(geom) AS lat
-            FROM actual_points
-          )
+      const result = await this.dataSource.query(
+        `
+        WITH actual_points AS (
           SELECT 
-            COALESCE(MAX(dist), 0)::float AS max_deviation,
-            COALESCE(AVG(dist), 0)::float AS avg_deviation,
-            json_agg(
-              json_build_object(
-                'idx', idx,
-                'distance', dist,
-                'lng', lng,
-                'lat', lat
-              )
-              ORDER BY dist DESC
-              LIMIT 10
-            ) AS details
-          FROM deviations
-          WHERE dist > 0
-          `,
-          [JSON.stringify(actualRoute), JSON.stringify(plannedRoute)],
-        );
+            (ST_DumpPoints(ST_SetSRID(ST_GeomFromGeoJSON($1), 4326))).geom AS geom,
+            generate_series(1, ST_NPoints(ST_SetSRID(ST_GeomFromGeoJSON($1), 4326))) AS idx
+        ),
+        deviations AS (
+          SELECT 
+            idx,
+            ST_Distance(
+              geom::geography,
+              ST_SetSRID(ST_GeomFromGeoJSON($2), 4326)::geography
+            ) AS dist,
+            ST_X(geom) AS lng,
+            ST_Y(geom) AS lat
+          FROM actual_points
+        )
+        SELECT 
+          COALESCE(MAX(dist), 0)::float AS max_deviation,
+          COALESCE(AVG(dist), 0)::float AS avg_deviation,
+          json_agg(
+            json_build_object(
+              'idx', idx,
+              'distance', dist,
+              'lng', lng,
+              'lat', lat
+            )
+            ORDER BY dist DESC
+            LIMIT 10
+          ) AS details
+        FROM deviations
+        WHERE dist > 0
+        `,
+        [JSON.stringify(actualRoute), JSON.stringify(plannedRoute)],
+      );
 
-        const row = result[0] || {};
-        return {
-          maxDeviation: row.max_deviation || 0,
-          avgDeviation: row.avg_deviation || 0,
-          details: row.details || [],
-        };
-      } finally {
-        await queryRunner.release();
-      }
+      const row = result[0] || {};
+      return {
+        maxDeviation: row.max_deviation || 0,
+        avgDeviation: row.avg_deviation || 0,
+        details: row.details || [],
+      };
     } catch (e) {
       return {
         maxDeviation: 0,
