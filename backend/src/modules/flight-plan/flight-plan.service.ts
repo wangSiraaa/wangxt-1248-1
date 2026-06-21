@@ -42,24 +42,35 @@ export class FlightPlanService {
     userId: string,
     userRole: UserRole,
     status?: FlightPlanStatus,
+    reportPending?: boolean,
   ): Promise<FlightPlan[]> {
-    const where: any = {};
-    if (status) where.status = status;
+    const queryBuilder = this.flightPlanRepository
+      .createQueryBuilder('fp')
+      .leftJoinAndSelect('fp.applicant', 'applicant')
+      .leftJoinAndSelect('fp.report', 'report');
+
+    if (status) {
+      queryBuilder.andWhere('fp.status = :status', { status });
+    }
     if (userRole === UserRole.OPERATOR) {
-      where.applicantId = userId;
+      queryBuilder.andWhere('fp.applicantId = :userId', { userId });
+    }
+    if (reportPending === true) {
+      queryBuilder
+        .andWhere('fp.status = :approvedStatus', { approvedStatus: FlightPlanStatus.APPROVED })
+        .andWhere('(report.id IS NULL OR report.status = :pendingStatus)', {
+          pendingStatus: 'pending',
+        });
     }
 
-    return this.flightPlanRepository.find({
-      where,
-      relations: ['applicant'],
-      order: { createdAt: 'DESC' },
-    });
+    queryBuilder.orderBy('fp.createdAt', 'DESC');
+    return queryBuilder.getMany();
   }
 
-  async findOne(id: string, userId: string, userRole: UserRole): Promise<FlightPlan> {
+  async findOne(id: string, userId: string, userRole: UserRole): Promise<any> {
     const plan = await this.flightPlanRepository.findOne({
       where: { id },
-      relations: ['applicant'],
+      relations: ['applicant', 'report'],
     });
     if (!plan) {
       throw new NotFoundException('飞行计划不存在');
@@ -67,7 +78,58 @@ export class FlightPlanService {
     if (userRole === UserRole.OPERATOR && plan.applicantId !== userId) {
       throw new ForbiddenException('无权查看此飞行计划');
     }
-    return plan;
+
+    const result: any = { ...plan };
+
+    if (plan.status === FlightPlanStatus.APPROVED) {
+      const now = new Date();
+      const startTime = new Date(plan.plannedStartTime);
+      const endTime = new Date(plan.plannedEndTime);
+      const report = plan.report;
+
+      const hoursToStart = (startTime.getTime() - now.getTime()) / (1000 * 60 * 60);
+
+      let reportStatus = 'not_reported';
+      if (report) {
+        if (report.status === 'pending') reportStatus = 'pending_report';
+        else if (report.status === 'takeoff_reported') reportStatus = 'takeoff_reported';
+        else if (report.status === 'landing_reported') reportStatus = 'landing_reported';
+        else if (report.status === 'completed') reportStatus = 'completed';
+      }
+
+      let reminder: any = null;
+      if (reportStatus === 'not_reported' || reportStatus === 'pending_report') {
+        let urgency = 'normal';
+        if (hoursToStart < 0 && now < endTime) urgency = 'overdue';
+        else if (hoursToStart >= 0 && hoursToStart <= 1) urgency = 'urgent';
+        else if (hoursToStart > 1 && hoursToStart <= 24) urgency = 'warning';
+
+        reminder = {
+          needReport: true,
+          reportStatus,
+          hoursToStart: Math.round(hoursToStart * 10) / 10,
+          urgency,
+          message:
+            urgency === 'overdue'
+              ? '起飞时间已到，请立即完成现场报备！'
+              : urgency === 'urgent'
+              ? `距离计划起飞不足${Math.ceil(hoursToStart * 60)}分钟，请尽快完成现场报备！`
+              : urgency === 'warning'
+              ? `距离计划起飞还有${Math.ceil(hoursToStart)}小时，请准备现场报备。`
+              : `距离计划起飞还有${Math.ceil(hoursToStart)}小时，记得按时报备。`,
+        };
+      }
+
+      result.reportInfo = {
+        reportStatus,
+        reportId: report?.id,
+        takeoffTime: report?.takeoffTime,
+        landingTime: report?.landingTime,
+        reminder,
+      };
+    }
+
+    return result;
   }
 
   async update(

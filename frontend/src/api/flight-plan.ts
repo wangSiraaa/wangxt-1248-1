@@ -1,8 +1,8 @@
 import request from '@/utils/request';
 
 export const flightPlanApi = {
-  list: (status?: string) =>
-    request.get('/flight-plans', { params: { status } }),
+  list: (status?: string, reportPending?: boolean) =>
+    request.get('/flight-plans', { params: { status, reportPending } }),
   detail: (id: string) => request.get(`/flight-plans/${id}`),
   create: (data: any) => request.post('/flight-plans', data),
   update: (id: string, data: any) => request.put(`/flight-plans/${id}`, data),

@@ -28,6 +28,12 @@ export class ReportController {
     return this.reportService.findAll(user.id, user.role, status);
   }
 
+  @Get('pending/list')
+  @ApiOperation({ summary: '获取待报备清单（运营公司起飞前提醒 / 公安未报备监控）' })
+  async findPendingList(@CurrentUser() user: any) {
+    return this.reportService.findPendingList(user.id, user.role);
+  }
+
   @Get(':flightPlanId')
   @ApiOperation({ summary: '获取飞行计划的报备信息' })
   async findByFlightPlan(

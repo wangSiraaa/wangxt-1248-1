@@ -42,11 +42,18 @@ export class FlightPlanController {
   @Get()
   @ApiOperation({ summary: '获取飞行计划列表' })
   @ApiQuery({ name: 'status', required: false, enum: FlightPlanStatus })
+  @ApiQuery({ name: 'reportPending', required: false, type: Boolean, description: '仅显示待报备的已批准计划' })
   async findAll(
     @Query('status') status?: FlightPlanStatus,
+    @Query('reportPending') reportPending?: string,
     @CurrentUser() user?: any,
   ) {
-    return this.flightPlanService.findAll(user.id, user.role, status);
+    return this.flightPlanService.findAll(
+      user.id,
+      user.role,
+      status,
+      reportPending === 'true',
+    );
   }
 
   @Get(':id')

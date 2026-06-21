@@ -3,6 +3,7 @@ import request from '@/utils/request';
 export const reportApi = {
   list: (status?: string) =>
     request.get('/reports', { params: { status } }),
+  pendingList: () => request.get('/reports/pending/list'),
   getByFlightPlan: (flightPlanId: string) =>
     request.get(`/reports/${flightPlanId}`),
   takeoff: (flightPlanId: string, data: any) =>

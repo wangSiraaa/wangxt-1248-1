@@ -28,7 +28,38 @@
             <el-descriptions-item label="计划起飞">{{ formatTime(detail.plannedStartTime) }}</el-descriptions-item>
             <el-descriptions-item label="计划降落">{{ formatTime(detail.plannedEndTime) }}</el-descriptions-item>
             <el-descriptions-item label="飞行目的" :span="2">{{ detail.purpose || '-' }}</el-descriptions-item>
+            <el-descriptions-item v-if="detail.reportInfo" label="报备状态" :span="2">
+              <el-tag :type="reportStatusTag(detail.reportInfo.reportStatus)">
+                {{ reportStatusLabel(detail.reportInfo.reportStatus) }}
+              </el-tag>
+              <span v-if="detail.reportInfo.takeoffTime" style="margin-left: 12px">
+                起飞：{{ formatTime(detail.reportInfo.takeoffTime) }}
+              </span>
+              <span v-if="detail.reportInfo.landingTime" style="margin-left: 12px">
+                降落：{{ formatTime(detail.reportInfo.landingTime) }}
+              </span>
+            </el-descriptions-item>
           </el-descriptions>
+
+          <el-divider v-if="detail.reportInfo?.reminder" />
+          <el-alert
+            v-if="detail.reportInfo?.reminder"
+            :title="detail.reportInfo.reminder.message"
+            :type="reminderAlertType(detail.reportInfo.reminder.urgency)"
+            :closable="false"
+            show-icon
+          >
+            <template #default v-if="(userStore.isOperator || userStore.isAdmin)">
+              <el-button
+                type="primary"
+                size="small"
+                style="margin-top: 8px"
+                @click="$router.push(`/reports?planId=${detail.id}`)"
+              >
+                立即报备
+              </el-button>
+            </template>
+          </el-alert>
 
           <el-divider />
 
@@ -224,6 +255,31 @@ function statusLabel(s: string) {
     approved: '已批准', rejected: '已驳回', cancelled: '已取消',
   };
   return map[s] || s;
+}
+
+function reportStatusTag(s: string) {
+  const map: Record<string, string> = {
+    not_reported: 'info', pending_report: 'warning',
+    takeoff_reported: 'primary', landing_reported: '',
+    completed: 'success',
+  };
+  return (map[s] || 'info') as any;
+}
+
+function reportStatusLabel(s: string) {
+  const map: Record<string, string> = {
+    not_reported: '未报备', pending_report: '待报备',
+    takeoff_reported: '已起飞报备', landing_reported: '已降落报备',
+    completed: '报备完成',
+  };
+  return map[s] || s;
+}
+
+function reminderAlertType(u: string) {
+  const map: Record<string, string> = {
+    overdue: 'error', urgent: 'error', warning: 'warning', normal: 'info',
+  };
+  return (map[u] || 'info') as any;
 }
 
 function riskLevelTag(l: string) {
